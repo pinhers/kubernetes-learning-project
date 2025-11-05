@@ -1,13 +1,17 @@
-Step-by-Step: How We Built the Persistent File Server
-Phase 1: Understanding the Problem
-Learned that emptyDir loses files when pods restart
+# Persistent File Server in Kubernetes
 
-Identified the need for persistent storage for file servers
+Step‑by‑step build of a persistent file server using a PersistentVolumeClaim.
 
-Phase 2: Created Persistent Volume Claim (PVC)
-bash
-# Created file-server-pvc.yaml
-```
+## Phase 1: Problem Understanding
+
+* `emptyDir` loses files when pods restart
+* Need persistent storage for file server
+
+## Phase 2: Create Persistent Volume Claim
+
+Create `file-server-pvc.yaml`:
+
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -19,15 +23,20 @@ spec:
     requests:
       storage: 5Gi
 ```
+
+Apply:
+
+```bash
 kubectl apply -f file-server-pvc.yaml
-PVC = Request for storage ("I need 5GB")
-
-Bound automatically by Minikube to a Persistent Volume
-
-Phase 3: Created Persistent Deployment
-bash
-# Created file-server-deployment-persistent.yaml  
 ```
+
+PVC requests storage. Minikube binds it to a PV automatically.
+
+## Phase 3: Persistent Deployment
+
+Create `file-server-deployment-persistent.yaml`:
+
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -69,90 +78,81 @@ spec:
     targetPort: 80
     nodePort: 30002
 ```
+
+Apply:
+
+```bash
 kubectl apply -f file-server-deployment-persistent.yaml
-Uses PVC instead of emptyDir
+```
 
-Same Nginx file server but with persistent storage
+## Phase 4: Test Persistence
 
-Service exposes it on port 30002
-
-Phase 4: Tested Persistence
-bash
-# Set pod variable
+```bash
 POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
 
-# Created test files
 kubectl exec -it $POD -- sh -c 'echo "PERSISTENT FILE" > /usr/share/nginx/html/test.txt'
 
-# Simulated pod crash
 kubectl delete pod $POD
 
-# Waited for new pod and updated variable
 kubectl wait --for=condition=ready pod -l app=file-server-persistent --timeout=60s
 POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
 
-# Verified files survived
 kubectl exec -it $POD -- ls -la /usr/share/nginx/html/
-Key Concepts Demonstrated:
-PVC → Request storage from cluster
+```
 
-PV → Actual storage provisioned (auto by Minikube)
+Files persist after pod restart.
 
-Volume Mount → Connect storage to container
+## Key Concepts
 
-Data Persistence → Files survive pod restarts
+* PVC: storage request
+* PV: storage provided (auto in Minikube)
+* VolumeMount: attach storage to container
+* Persistence: data survives restarts
 
-Shell Variables → Temporary session storage
+## Current Architecture
 
-Current Architecture:
-text
-Internet → NodePort:30002 → File Server Service → File Server Pod → Persistent Volume
-Result: Your file server now maintains files even when pods crash/restart! 
+```
+Internet → NodePort:30002 → Service → Pod → Persistent Volume
+```
 
-------
+## Troubleshooting
 
- Pod Label Mismatch
-Problem: no matching resources found / array index out of bounds
+### Label Mismatch
 
-Root Cause: Using wrong label selector (app=file-server vs app=file-server-persistent)
+```
+no matching resources found
+```
 
-Fix: Use correct label
+Fix:
 
-bash
-# Check actual labels:
+```bash
 kubectl get pods --show-labels
-# Use correct label:
 kubectl get pods -l app=file-server-persistent
+```
 
+### PV Appears Empty
 
-Persistent Volume Connectivity
-Problem: Empty directory after PVC creation
+Fresh PV starts empty. Create files after deploy.
 
-Root Cause: Fresh PV starts empty, need to populate it
+```bash
+kubectl exec -it $POD -- sh -c 'echo "content" > /usr/share/nginx/html/file.txt'
+```
 
-Fix: Create files after deployment
+### Variable Lost
 
-bash
-kubectl exec -it $POD -- sh -c 'echo "content" > /path/file.txt'
+Shell variables do not persist.
 
-
-Variable Scope Issues
-Problem: $POD variable empty in new terminal session
-
-Root Cause: Shell variables are session-specific
-
-Fix: Re-get pod name in each session
-
-bash
+```bash
 POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
+```
 
+## Useful Debug Commands
 
----
-Key Debugging Commands Used:
-bash
-kubectl get pods --show-labels                    # Check pod labels
-kubectl describe pod <pod-name>                   # Detailed pod info
-kubectl get pvc                                   # Check persistent volumes
-kubectl logs <pod-name>                          # Check container logs
-kubectl exec -it <pod> -- ls -la /path/          # Debug file system
-kubectl get events --sort-by=.metadata.creationTimestamp  # Cluster events
+```bash
+kubectl get pods --show-labels
+kubectl describe pod
+kubectl get pvc
+kubectl logs
+kubectl exec -it $POD -- ls -la /usr/share/nginx/html/
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
