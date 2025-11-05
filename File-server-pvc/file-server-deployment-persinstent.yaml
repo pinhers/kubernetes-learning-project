@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-server-persistent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-server-persistent
+  template:
+    metadata:
+      labels:
+        app: file-server-persistent
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: persistent-storage
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: persistent-storage
+        persistentVolumeClaim:
+          claimName: file-server-pvc  # Use our PVC
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-server-persistent-svc
+spec:
+  type: NodePort
+  selector:
+    app: file-server-persistent
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30002  # Different port to avoid conflict
