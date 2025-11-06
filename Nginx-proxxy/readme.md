@@ -1,81 +1,208 @@
-# Kubernetes Reverse Proxy Lab
+# Kubernetes Nginx Reverse Proxy Learning Project
 
-Hands-on lab to practice Kubernetes by running a Flask backend behind an Nginx reverse proxy. Future additions: PostgreSQL and file-server pod.
+Hands-on lab to practice Kubernetes fundamentals by deploying a Flask backend behind an Nginx reverse proxy.
 
-## Architecture
+## 📋 Project Overview
+
+This project demonstrates:
+
+* Containerizing a Flask application
+* Configuring Nginx as a reverse proxy
+* Kubernetes Deployments and Services
+* ConfigMaps for configuration management
+* Multi-container orchestration
+
+## 🏗️ Architecture
 
 ```
 Internet
    ↓
-Nginx (reverse proxy, LoadBalancer/NodePort)
+Nginx Reverse Proxy (LoadBalancer/NodePort:80)
    ↓
-Flask Application (backend service)
+Flask Backend Service (ClusterIP:5000)
+   ↓
+Flask Application Pods (Port:5000)
 ```
 
-## Repo Layout
+## 📁 Project Structure
 
 ```
-kubeproject/
-├── server.py                # Flask app
-├── requirements.txt         # Python deps
-├── Dockerfile               # Flask container
-├── README.md
-└── custom_nginx/
-    ├── nginx.conf           # Proxy config
-    ├── nginx-configmap.yaml
-    ├── nginx-deployment.yaml
-    └── flask-deployment.yaml
+Nginx-proxxy/
+├── server.py                    # Flask app
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # Flask container definition
+├── readme.md                    # This file
+└── custom_niginx/               # Nginx configuration
+    ├── Dockerfile               # Custom Nginx image (not currently used)
+    ├── nginx.conf               # Basic Nginx config
+    ├── nginx-configmap.yaml     # Enhanced ConfigMap
+    ├── nginx-deployment.yaml    # Nginx reverse proxy deployment
+    └── flask-deployment.yaml    # Flask backend deployment
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### Start Minikube
+### Prerequisites
 
-```
+* Minikube
+* kubectl
+* Docker
+
+### Deployment Steps
+
+Start cluster:
+
+```bash
 minikube start
 ```
 
-### Point Docker to Minikube
+Configure Docker for Minikube:
 
-```
+```bash
 eval $(minikube docker-env)
 ```
 
-### Build Flask Image
+Build Flask image:
 
-```
+```bash
 docker build -t flask-app:latest .
 ```
 
-### Apply Manifests
+Deploy manifests:
 
-```
-kubectl apply -f custom_nginx/
+```bash
+kubectl apply -f custom_niginx/
 ```
 
-### Verify Pods and Services
+Verify:
 
-```
+```bash
 kubectl get pods
 kubectl get svc
 ```
 
-### Access the App
+Access app:
 
-```
+```bash
 minikube service nginx-svc --url
 curl http://<service-url>/flask
+curl http://<service-url>/health
 ```
 
-## Notes
+## 🔧 Configuration Details
 
-* Designed for local lab use, not production
-* Nginx runs as reverse proxy. No TLS here; add ingress later if needed
-* Flask runs as simple backend. Use Gunicorn once scaling matters
+### Flask Application
 
-## Next Steps
+* Port: 5000
+* Endpoints:
 
-* Add PostgreSQL StatefulSet
-* Persistent storage for uploads
-* Helm refactor for modularity
-* CI build for images, kustomize overlays
+  * `/` → Returns JSON greeting
+  * `/health` → Health check
+
+### Nginx Reverse Proxy
+
+* Container port: 8080, Service port: 80
+* Routes:
+
+  * `/flask` → Flask backend service
+  * `/health` → Static health response
+* Features:
+
+  * Header forwarding (X-Real-IP, X-Forwarded-For)
+  * Load balancing between replicas
+
+### Kubernetes Resources
+
+| Resource            | Type         | Purpose                         |
+| ------------------- | ------------ | ------------------------------- |
+| flask-backend       | Deployment   | Manages Flask pods (2 replicas) |
+| backend-svc         | Service      | Exposes Flask pods internally   |
+| nginx-reverse-proxy | Deployment   | Runs Nginx proxy                |
+| nginx-svc           | LoadBalancer | Exposes Nginx externally        |
+| nginx-config        | ConfigMap    | Stores Nginx config             |
+
+## 🛠️ Technical Notes
+
+### Current Implementation
+
+* Uses `nginx:alpine` with ConfigMap
+* Flask app replicas: 2
+* Nginx service: LoadBalancer (or NodePort)
+* Local Docker builds
+
+### Development vs Production
+
+✅ Ideal for learning basics
+⚠️ Not production-ready:
+
+* No TLS
+* Basic health checks
+* Local-only images
+* No resource limits
+
+## 🎯 Learning Objectives
+
+* Dockerize Python apps
+* Kubernetes Deployments and replicas
+* Service discovery and networking
+* ConfigMaps for configuration
+* Reverse proxy routing
+* Multi-service orchestration
+
+## 📈 Next Steps
+
+### Immediate
+
+* Add health checks
+* Add resource limits
+* Add readiness/liveness probes
+
+### Advanced
+
+* PostgreSQL StatefulSet
+* Persistent Volumes
+* Helm charts
+* Ingress controller with TLS
+* CI/CD pipeline
+
+### Production Readiness
+
+* Use Gunicorn for Flask
+* Push to Docker Hub/ECR
+* Monitoring with Prometheus/Grafana
+* Logging with ELK
+* Network policies
+
+## 🔍 Troubleshooting
+
+### Images not found
+
+```bash
+eval $(minikube docker-env)
+docker images | grep flask-app
+```
+
+### CrashLoopBackOff
+
+```bash
+kubectl logs <pod-name>
+```
+
+### Services not accessible
+
+```bash
+kubectl get svc
+kubectl get pods
+```
+
+## 📝 Learning Resources
+
+Focus areas:
+
+* Pod networking
+* Service discovery
+* Reverse proxy config
+* Multi-container apps
+* Config management in Kubernetes
+
+> Educational purpose only. Not for production.
