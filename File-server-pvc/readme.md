@@ -1,15 +1,81 @@
-# Persistent File Server in Kubernetes
+# Kubernetes Persistent File Server Lab
 
-Step‑by‑step build of a persistent file server using a PersistentVolumeClaim.
+Hands-on project to understand persistent storage in Kubernetes using PersistentVolumeClaims (PVC) with an Nginx file server.
 
-## Phase 1: Problem Understanding
+## 📋 Project Overview
 
-* `emptyDir` loses files when pods restart
-* Need persistent storage for file server
+This lab demonstrates how to achieve data persistence in Kubernetes by replacing `emptyDir` volumes with persistent storage that survives pod restarts and failures.
 
-## Phase 2: Create Persistent Volume Claim
+## 🎯 Learning Objectives
 
-Create `file-server-pvc.yaml`:
+* Understand `emptyDir` limitations
+* Learn PVC concepts and usage
+* Configure persistent storage in deployments
+* Test persistence across pod restarts
+* Work with storage in Minikube
+
+## 🏗️ Architecture
+
+```
+Internet
+   ↓
+NodePort Service (30002)
+   ↓
+File Server Pod
+   ↓
+Persistent Volume Claim (5Gi)
+   ↓
+Persistent Volume (auto-provisioned by Minikube)
+```
+
+## 📁 Project Structure
+
+```
+file-server-project/
+├── file-server-pvc.yaml                   # PVC definition
+├── file-server-deployment-persistent.yaml # Deployment using PVC
+└── README.md                              # This file
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+* Minikube running
+* kubectl configured
+
+### Steps
+
+Create PVC:
+
+```bash
+kubectl apply -f file-server-pvc.yaml
+```
+
+Deploy file server:
+
+```bash
+kubectl apply -f file-server-deployment-persistent.yaml
+```
+
+Verify:
+
+```bash
+kubectl get pvc
+kubectl get pods -l app=file-server-persistent
+kubectl get svc file-server-svc
+```
+
+Access:
+
+```bash
+minikube service file-server-svc --url
+curl http://<minikube-ip>:30002/
+```
+
+## 🔧 Configuration Details
+
+### PersistentVolumeClaim (`file-server-pvc.yaml`)
 
 ```yaml
 apiVersion: v1
@@ -24,135 +90,137 @@ spec:
       storage: 5Gi
 ```
 
-Apply:
+### Deployment (`file-server-deployment-persistent.yaml`)
+
+* Image: `nginx:alpine`
+* Mount: `/usr/share/nginx/html`
+* Service: NodePort (30002)
+* Replicas: 1
+
+## 🧪 Testing Persistence
 
 ```bash
-kubectl apply -f file-server-pvc.yaml
-```
+export POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
 
-PVC requests storage. Minikube binds it to a PV automatically.
+kubectl exec -it $POD -- sh -c 'echo "PERSISTENT DATA SURVIVES RESTARTS" > /usr/share/nginx/html/test.txt'
 
-## Phase 3: Persistent Deployment
-
-Create `file-server-deployment-persistent.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: file-server-persistent
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: file-server-persistent
-  template:
-    metadata:
-      labels:
-        app: file-server-persistent
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        volumeMounts:
-        - name: persistent-storage
-          mountPath: /usr/share/nginx/html
-      volumes:
-      - name: persistent-storage
-        persistentVolumeClaim:
-          claimName: file-server-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: file-server-svc
-spec:
-  type: NodePort
-  selector:
-    app: file-server-persistent
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 80
-    nodePort: 30002
-```
-
-Apply:
-
-```bash
-kubectl apply -f file-server-deployment-persistent.yaml
-```
-
-## Phase 4: Test Persistence
-
-```bash
-POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
-
-kubectl exec -it $POD -- sh -c 'echo "PERSISTENT FILE" > /usr/share/nginx/html/test.txt'
+kubectl exec -it $POD -- cat /usr/share/nginx/html/test.txt
 
 kubectl delete pod $POD
 
 kubectl wait --for=condition=ready pod -l app=file-server-persistent --timeout=60s
-POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
+export NEW_POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
 
-kubectl exec -it $POD -- ls -la /usr/share/nginx/html/
+kubectl exec -it $NEW_POD -- cat /usr/share/nginx/html/test.txt
 ```
 
-Files persist after pod restart.
+## 📚 Key Concepts
 
-## Key Concepts
+### PersistentVolumeClaim (PVC)
 
-* PVC: storage request
-* PV: storage provided (auto in Minikube)
-* VolumeMount: attach storage to container
-* Persistence: data survives restarts
+Request for storage. Minikube auto-provisions the PV.
 
-## Current Architecture
+### PersistentVolume (PV)
 
+Actual storage backing the PVC.
+
+### Volume Mount
+
+Connects PVC to container path.
+
+### Access Modes
+
+* `ReadWriteOnce`: single node read/write
+* `ReadOnlyMany`: multi-node read
+* `ReadWriteMany`: multi-node read/write
+
+## 🛠️ Troubleshooting
+
+### PVC Pending
+
+```bash
+kubectl get pvc
+kubectl describe pvc file-server-pvc
+kubectl get storageclass
 ```
-Internet → NodePort:30002 → Service → Pod → Persistent Volume
-```
 
-## Troubleshooting
+### Pod Not Starting
+
+```bash
+kubectl describe pod -l app=file-server-persistent
+kubectl logs -l app=file-server-persistent
+```
 
 ### Label Mismatch
-
-```
-no matching resources found
-```
-
-Fix:
 
 ```bash
 kubectl get pods --show-labels
 kubectl get pods -l app=file-server-persistent
 ```
 
-### PV Appears Empty
-
-Fresh PV starts empty. Create files after deploy.
+### File Missing
 
 ```bash
-kubectl exec -it $POD -- sh -c 'echo "content" > /usr/share/nginx/html/file.txt'
+kubectl exec -it $POD -- sh -c 'echo "Welcome to Persistent File Server" > /usr/share/nginx/html/index.html'
 ```
 
-### Variable Lost
-
-Shell variables do not persist.
+### Debug Commands
 
 ```bash
-POD=$(kubectl get pods -l app=file-server-persistent -o jsonpath='{.items[0].metadata.name}')
-```
-
-## Useful Debug Commands
-
-```bash
+kubectl get pvc,pv,pods,svc -o wide
 kubectl get pods --show-labels
-kubectl describe pod
-kubectl get pvc
-kubectl logs
-kubectl exec -it $POD -- ls -la /usr/share/nginx/html/
+kubectl describe svc file-server-svc
+kubectl describe pvc file-server-pvc
+kubectl get pv
 kubectl get events --sort-by=.metadata.creationTimestamp
+kubectl exec -it $POD -- ls -la /usr/share/nginx/html/
 ```
+
+## 🎯 Learning Outcomes
+
+* PVC vs emptyDir
+* Storage provisioning
+* Volume mounts
+* Persistence testing
+* Storage troubleshooting
+
+## 📈 Next Steps
+
+### Immediate
+
+* Add `index.html`
+* Add upload functionality
+* Define resource limits
+
+### Advanced
+
+* `ReadWriteMany` access
+* Dynamic provisioning
+* File browser UI
+* Authentication
+* Backup strategies
+
+### Production Considerations
+
+* Cloud-specific StorageClasses
+* Volume snapshots
+* Storage monitoring
+* Network policies
+
+## 🔍 Practical Exercises
+
+### Exercise 1: Scale and Observe
+
+```bash
+kubectl scale deployment file-server-persistent --replicas=2
+kubectl scale deployment file-server-persistent --replicas=1
+```
+
+### Exercise 2: Modify Content
+
+```bash
+kubectl exec -it $POD -- sh -c 'echo "File 1" > /usr/share/nginx/html/file1.txt'
+kubectl exec -it $POD -- sh -c 'echo "File 2" > /usr/share/nginx/html/file2.txt'
+```
+
+> Educational lab on persistent storage in Kubernetes. Ideal for understanding data durability in containerized environments.
