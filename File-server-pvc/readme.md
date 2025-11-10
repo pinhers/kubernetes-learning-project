@@ -65,7 +65,11 @@ kubectl get pvc
 kubectl get pods -l app=file-server-persistent
 kubectl get svc file-server-persistent-svc
 ```
+Add index.html in the pod:
 
+```bash
+kubectl exec -it $POD -- sh -c 'echo "<html><body><h1>File Server Works!</h1><p>Persistent storage is working!</p></body></html>" > /usr/share/nginx/html/index.html'
+```
 Access:
 
 ```bash
