@@ -63,7 +63,7 @@ Verify:
 ```bash
 kubectl get pvc
 kubectl get pods -l app=file-server-persistent
-kubectl get svc file-server-svc
+kubectl get svc file-server-persistent-svc
 ```
 
 Access:
