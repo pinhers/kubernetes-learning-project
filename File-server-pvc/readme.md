@@ -55,7 +55,7 @@ kubectl apply -f file-server-pvc.yaml
 Deploy file server:
 
 ```bash
-kubectl apply -f file-server-deployment-persistent.yaml
+kubectl apply -f file-server-deployment-persinstent.yaml
 ```
 
 Verify:
