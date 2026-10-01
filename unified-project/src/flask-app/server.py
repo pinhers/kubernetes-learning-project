@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template_string
 import os
 import shutil
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -44,17 +45,25 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
+
+    safe_filename = secure_filename(file.filename)
+    if safe_filename == '':
+        return jsonify({'error': 'Invalid filename'}), 400
     
     # Ensure upload directory exists
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     
-    # Save file
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    # Save file (enforce path remains within upload folder)
+    upload_root = os.path.abspath(UPLOAD_FOLDER)
+    file_path = os.path.abspath(os.path.join(upload_root, safe_filename))
+    if os.path.commonpath([upload_root, file_path]) != upload_root:
+        return jsonify({'error': 'Invalid file path'}), 400
+
     file.save(file_path)
     
     return jsonify({
-        'message': f'File {file.filename} uploaded successfully!',
-        'download_url': f'/files/{file.filename}'
+        'message': f'File {safe_filename} uploaded successfully!',
+        'download_url': f'/files/{safe_filename}'
     }), 200
 
 @app.route('/files')
